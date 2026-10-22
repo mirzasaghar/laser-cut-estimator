@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-version="d526e1a95f">
+<html lang="en" data-version="99ba1d1f43">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,13 +7,13 @@
 <title>Laser cut estimator</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preload" href="fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="app.css?v=d526e1a95f">
+<link rel="stylesheet" href="app.css?v=99ba1d1f43">
 </head>
 <body>
 <header class="rail">
   <a class="brand" href="#work" data-view="work">Laser cut estimator</a>
   <div class="job">
-    <label class="jf"><span>Customer</span><input id="customer" autocomplete="organization" placeholder="Company name"></label>
+    <label class="jf"><span>Customer</span><input id="customer" autocomplete="organization" placeholder="Company"></label>
     <label class="jf"><span>Reference</span><input id="reference" placeholder="PO number"></label>
     <label class="jf narrow"><span>Quote</span><input id="quote-no"></label>
   </div>
@@ -62,8 +62,7 @@
   <p class="lede">The rates below are only <b>examples</b> for the demo. On your PC they come from your own cut charts in <code>rates.xlsx</code>, and you can edit them here or in Excel.</p>
   <div class="rates-grid">
     <section class="panel"><div class="panel-head"><h2>Cut rates</h2><button class="link" id="add-rate">Add a row</button></div><div class="table-wrap"><table class="grid" id="rates-table"></table></div></section>
-    <section class="panel"><div class="panel-head"><h2>Shop charges</h2></div><div class="charges" id="charges"></div>
-      <div class="panel-head sub"><h2>End paint</h2></div><p class="hint">The colour each material is marked with on screen, like the paint on the end of a bar.</p><div class="paints" id="paints"></div></section>
+    <section class="panel"><div class="panel-head"><h2>Shop charges</h2></div><div class="charges" id="charges"></div></section>
   </div>
 </main>
 
@@ -74,6 +73,6 @@
 </main>
 
 <div class="boot" id="boot" role="status"><div><b>Getting the estimator ready</b><span id="boot-step">Starting</span></div></div>
-<script type="module" src="app.js?v=d526e1a95f"></script>
+<script type="module" src="app.js?v=99ba1d1f43"></script>
 </body>
 </html>

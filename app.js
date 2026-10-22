@@ -1,4 +1,4 @@
-import { connect, call } from "./engine.js?v=d526e1a95f";
+import { connect, call } from "./engine.js?v=99ba1d1f43";
 
 const $ = (s) => document.querySelector(s);
 const money = (v) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -6,8 +6,6 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 const mins = (m) => { const s = Math.round(m * 60); return s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s` : `${s}s`; };
 
-const DEFAULT_PAINT = { "Mild steel": "#c0392b", "Stainless 304": "#2e8b57", "Aluminum 5052": "#6a4fb3" };
-const SPARE_PAINT = ["#1f6fb5", "#d4a017", "#8a5a2b", "#0b8794", "#7a7f85"];
 const BASES = ["Rectangle the part needs", "Full sheets used", "Net part area"];
 const CHARGES = [
   ["shop_name", "Shop name on the quote", "text", "wide"],
@@ -20,7 +18,7 @@ const CHARGES = [
 ];
 
 const state = {
-  rates: [], settings: { material_basis: BASES[0], shop_name: "", sheet_margin_in: 0.5 }, paint: { ...DEFAULT_PAINT },
+  rates: [], settings: { material_basis: BASES[0], shop_name: "", sheet_margin_in: 0.5 },
   parts: [], selected: null, total: null, nextNo: 1, ready: false,
 };
 
@@ -96,7 +94,7 @@ async function addFiles(files) {
   for (const f of ok) addPart(f.name, await readB64(f));
 }
 
-// the sample plate is quoted in stainless so the end-paint colours show more than one material
+// the sample plate is quoted in stainless so the quote shows more than one material
 const SAMPLE_MATERIAL = { "mounting-plate-3d.step": "Stainless 304" };
 
 async function trySamples() {
@@ -138,10 +136,6 @@ function defaultThickness(part) {
   }
   return opts[Math.min(3, opts.length - 1)].thickness;
 }
-function paintFor(mat) {
-  if (!state.paint[mat]) state.paint[mat] = SPARE_PAINT[Object.keys(state.paint).length % SPARE_PAINT.length];
-  return state.paint[mat];
-}
 
 async function reprice() {
   const ready = state.parts.filter((p) => p.geo);
@@ -171,9 +165,8 @@ function renderParts() {
       else sub = `${p.material || ""} ${p.thickness || ""}`;
     }
     const checks = g && !g.blocked ? (g.warnings || []).length + ((e && e.notes) || []).length : 0;
-    const paint = g && !g.blocked && p.material ? paintFor(p.material) : "#c3cad0";
     return `<li class="part ${cls}" data-id="${p.id}" aria-selected="${p.id === state.selected}" tabindex="0">
-      <span class="paint" style="background:${paint}"></span><span class="no">${p.id}</span>
+      <span class="no">${p.id}</span>
       <span class="text"><span class="name" title="${esc(p.name)}">${esc(p.name)}</span><span class="sub${g && g.blocked ? " flag" : ""}">${esc(sub)}</span>${checks ? `<span class="chk">${plural(checks, "thing", "things")} to check</span>` : ""}</span>
       <span class="amt">${amt || (g && g.blocked ? "–" : "")}</span></li>`;
   }).join("");
@@ -210,9 +203,8 @@ function renderSelected() {
     sheet.innerHTML = `<div class="blocked"><b>Can't price this file as it is</b>${esc(g.blocked)}</div>`;
     legend.innerHTML = "";
   } else {
-    sheet.innerHTML = drawPart(g, paintFor(p.material));
-    const items = [`<span><svg viewBox="0 0 22 12"><rect x="1" y="1" width="20" height="10" fill="#d6d9dc" stroke="#111417"/></svg>part</span>`,
-      `<span><svg viewBox="0 0 22 12"><rect x="1" y="1" width="5" height="10" fill="${paintFor(p.material)}"/></svg>end paint: ${esc(p.material)}</span>`];
+    sheet.innerHTML = drawPart(g);
+    const items = [`<span><svg viewBox="0 0 22 12"><rect x="1" y="1" width="20" height="10" fill="#d6d9dc" stroke="#111417"/></svg>part</span>`];
     if (g.reference_lines.length) items.push(`<span><svg viewBox="0 0 22 12"><line x1="1" y1="6" x2="21" y2="6" stroke="#0b8794" stroke-width="2" stroke-dasharray="4 3"/></svg>bend or etch line, not cut</span>`);
     if (g.contours.some((c) => c.role === "open")) items.push(`<span><svg viewBox="0 0 22 12"><line x1="1" y1="6" x2="21" y2="6" stroke="#c4161c" stroke-width="2"/></svg>open outline</span>`);
     legend.innerHTML = items.join("");
@@ -221,17 +213,16 @@ function renderSelected() {
   renderFigures();
 }
 
-function drawPart(g, paint) {
+function drawPart(g) {
   const pts = g.contours.flatMap((c) => c.points);
   const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
   const x0 = Math.min(...xs), y0 = Math.min(...ys), w = Math.max(g.width, 1e-6), h = Math.max(g.height, 1e-6);
-  const pad = Math.max(w, h) * 0.05, sw = Math.max(w, h) / 450, stripe = Math.max(w, h) * 0.018;
+  const pad = Math.max(w, h) * 0.05, sw = Math.max(w, h) / 450;
   const d = (ps, close) => ps.map((q, i) => `${i ? "L" : "M"}${q[0].toFixed(4)},${(-q[1]).toFixed(4)}`).join(" ") + (close ? " Z" : "");
   const closed = g.contours.filter((c) => c.closed).map((c) => d(c.points, true)).join(" ");
   const refs = g.reference_lines.map((r) => `<path d="${d(r)}" fill="none" stroke="#0b8794" stroke-width="${sw * 1.4}" stroke-dasharray="${sw * 7} ${sw * 5}"/>`).join("");
   const open = g.contours.filter((c) => !c.closed).map((c) => `<path d="${d(c.points)}" fill="none" stroke="#c4161c" stroke-width="${sw * 2}"/>`).join("");
-  return `<svg class="part-svg" viewBox="${x0 - pad - stripe * 1.6} ${-(y0 + h) - pad} ${w + 2 * pad + stripe * 1.6} ${h + 2 * pad}" role="img" aria-label="Flat pattern of ${esc(g.name)}">
-    <rect x="${x0 - stripe * 1.6}" y="${-(y0 + h)}" width="${stripe}" height="${h}" fill="${paint}"/>
+  return `<svg class="part-svg" viewBox="${x0 - pad} ${-(y0 + h) - pad} ${w + 2 * pad} ${h + 2 * pad}" role="img" aria-label="Flat pattern of ${esc(g.name)}">
     ${closed ? `<path d="${closed}" fill="#d6d9dc" fill-rule="evenodd" stroke="#111417" stroke-width="${sw}" stroke-linejoin="round"/>` : ""}${refs}${open}</svg>`;
 }
 
@@ -381,8 +372,6 @@ function renderRates() {
     if (state.ready) reprice();
   }));
 
-  $("#paints").innerHTML = materials().map((m) => `<label><input type="color" data-m="${esc(m)}" value="${paintFor(m)}">${esc(m)}</label>`).join("");
-  $("#paints").querySelectorAll("input").forEach((el) => el.addEventListener("input", () => { state.paint[el.dataset.m] = el.value; renderParts(); renderSelected(); }));
 }
 
 function afterRatesChange() {
