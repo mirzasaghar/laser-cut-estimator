@@ -248,7 +248,7 @@ def _classify(geo: PartGeometry):
     if open_n:
         geo.warnings.append(f"{_n(open_n, 'open contour')}: the outline has a gap or there is a stray line. Each one is still counted as a cut and a pierce.")
     if geo.duplicates_removed:
-        geo.warnings.append(f"{_n(geo.duplicates_removed, 'duplicate line')} removed so the laser doesn't cut the same path twice.")
+        geo.warnings.append(f"Found {_n(geo.duplicates_removed, 'line')} drawn twice and took out the " + ("copy." if geo.duplicates_removed == 1 else "copies."))
     if geo.gaps_closed:
         geo.warnings.append(f"{_n(geo.gaps_closed, 'tiny gap')} closed when joining the outline.")
     if geo.parts_in_file > 1:

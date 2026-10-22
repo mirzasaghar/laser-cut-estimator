@@ -343,7 +343,7 @@ def read_step(data: bytes, name: str) -> StepPart:
             if c > 0.9999:
                 caps.add(round(_dot(o, n) * scale, 4))
             elif c > 1e-4:
-                problems.append("a face at an angle (bevel, chamfer or bend)")
+                problems.append("an angled face (a bevel, chamfer or bend)")
         elif st in ("CYLINDRICAL_SURFACE", "SURFACE_OF_LINEAR_EXTRUSION"):
             if st == "CYLINDRICAL_SURFACE":
                 axis = model.placement(sa[1])[1]
@@ -351,21 +351,23 @@ def read_step(data: bytes, name: str) -> StepPart:
                 vt, va = model.get(sa[2])
                 axis = model.direction(va[1]) if vt == "VECTOR" else n
             if abs(abs(_dot(axis, n)) - 1) > 1e-4:
-                problems.append("a curved face across the plate (a bend)")
+                problems.append("a bend")
         elif st in ("CONICAL_SURFACE",):
-            problems.append("a cone (countersink)")
+            problems.append("a countersink")
         elif st in ("TOROIDAL_SURFACE", "SPHERICAL_SURFACE"):
-            problems.append("a rounded edge or formed feature")
+            problems.append("a rounded or formed edge")
         else:
             problems.append("a free-form surface")
     if len(caps) > 2:
-        problems.append("faces at more than two heights (steps, pockets or a bend)")
+        problems.append("faces at more than two heights")
 
     if part.solids > 1:
         problems.append(f"{part.solids} separate solids")
     if problems:
         uniq = list(dict.fromkeys(problems))
-        part.reason = "Not a flat plate: it has " + ", ".join(uniq[:3]) + ". It needs a flat pattern (DXF) before it can be priced."
+        said = uniq[:3]
+        listed = said[0] if len(said) == 1 else ", ".join(said[:-1]) + " and " + said[-1]
+        part.reason = f"The model has {listed}, so it isn't a flat plate and can't be priced from the 3D file."
         return part
 
     part.flat = True

@@ -101,8 +101,8 @@ def build_quote_pdf(info: dict, lines: list[dict], totals: dict) -> bytes:
     pdf.ln(22)
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(*GREY)
-    terms = (f"Lead time {int(info['lead_days'])} working days from order and approved files. "
-             "Prices exclude sales tax and freight. Parts are cut from the files supplied; please check sizes and quantities before ordering.")
+    terms = (f"Lead time {int(info['lead_days'])} working days ARO, once files are approved. "
+             "Prices FOB our shop, sales tax extra where it applies. Parts are cut from the files supplied; please check sizes and quantities before ordering.")
     pdf.multi_cell(w, 13, terms, align="L")
     return bytes(pdf.output())
 

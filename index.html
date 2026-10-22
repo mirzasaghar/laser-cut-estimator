@@ -1,77 +1,79 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-version="d526e1a95f">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Laser cut estimator</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='2' y='2' width='12' height='12' fill='none' stroke='%231d2327' stroke-width='1.6'/%3E%3Ccircle cx='8' cy='8' r='2' fill='%23c2410c'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/browser@1.9.2/build/stlite.css">
-<style>
-  body { margin: 0; background: #fff; color: #1d2327; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-  #boot { max-width: 34rem; margin: 18vh auto 0; padding: 0 16px; }
-  #boot h1 { font-size: 1.4rem; margin: 0 0 .4rem; }
-  #boot p { color: #4b5563; line-height: 1.5; margin: 0; }
-</style>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="app.css?v=d526e1a95f">
 </head>
 <body>
-<div id="root"><div id="boot"><h1>Laser cut estimator</h1><p>Starting up. The estimator runs in your browser, so the first load takes about 20 seconds while it fetches Python and the CAD readers. After that it's quick.</p></div></div>
-<noscript>This estimator needs JavaScript turned on.</noscript>
-<script type="module">
-import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@1.9.2/build/stlite.js";
-mount({
-  requirements: ["ezdxf==1.4.5", "pymupdf", "fpdf2==2.8.9", "openpyxl"],
-  entrypoint: "streamlit_app.py",
-  files: {
-  "streamlit_app.py": {
-    "url": "./app/streamlit_app.py?v=f7107a62"
-  },
-  "estimator.py": {
-    "url": "./app/estimator.py?v=48eb0f5b"
-  },
-  "step_reader.py": {
-    "url": "./app/step_reader.py?v=37d1ba02"
-  },
-  "quote_doc.py": {
-    "url": "./app/quote_doc.py?v=b31159af"
-  },
-  "rates.xlsx": {
-    "url": "./app/rates.xlsx?v=9fff2541"
-  },
-  "how_it_works.md": {
-    "url": "./app/how_it_works.md?v=59a7e030"
-  },
-  "icon.png": {
-    "url": "./app/icon.png?v=aa58565b"
-  },
-  "samples/flange-metric.dxf": {
-    "url": "./app/samples/flange-metric.dxf?v=720484f4"
-  },
-  "samples/flange-print.pdf": {
-    "url": "./app/samples/flange-print.pdf?v=4fc53161"
-  },
-  "samples/l-bracket-bent-3d.step": {
-    "url": "./app/samples/l-bracket-bent-3d.step?v=2e4e98e0"
-  },
-  "samples/l-bracket-flat.dxf": {
-    "url": "./app/samples/l-bracket-flat.dxf?v=e1e8bf46"
-  },
-  "samples/mounting-plate-3d.step": {
-    "url": "./app/samples/mounting-plate-3d.step?v=1686957e"
-  },
-  "samples/mounting-plate.dxf": {
-    "url": "./app/samples/mounting-plate.dxf?v=a916467e"
-  }
-},
-  streamlitConfig: {
-  "client.toolbarMode": "viewer",
-  "theme.base": "light",
-  "theme.primaryColor": "#c2410c",
-  "theme.textColor": "#1d2327",
-  "theme.backgroundColor": "#ffffff",
-  "theme.secondaryBackgroundColor": "#f2f3f1"
-},
-}, document.getElementById("root"));
-</script>
+<header class="rail">
+  <a class="brand" href="#work" data-view="work">Laser cut estimator</a>
+  <div class="job">
+    <label class="jf"><span>Customer</span><input id="customer" autocomplete="organization" placeholder="Company name"></label>
+    <label class="jf"><span>Reference</span><input id="reference" placeholder="PO number"></label>
+    <label class="jf narrow"><span>Quote</span><input id="quote-no"></label>
+  </div>
+  <nav class="links" aria-label="Other screens">
+    <a href="#rates" data-view="rates">Rates</a>
+    <a href="#help" data-view="help">Help</a>
+  </nav>
+  <button class="btn primary" id="download-pdf" disabled>Download quote PDF</button>
+</header>
+
+<main id="view-work" class="work">
+  <section class="panel parts" aria-label="Parts">
+    <div class="panel-head"><h2>Parts <span id="part-count"></span></h2><button class="link" id="try-samples">Try the sample files</button></div>
+    <label class="drop" id="drop">
+      <input type="file" id="file-input" multiple accept=".dxf,.pdf,.step,.stp">
+      <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M10 13V3M6 7l4-4 4 4M3 13v3h14v-3"/></svg>
+      <span><b>Drop DXF, PDF or STEP files</b> or click to choose</span>
+    </label>
+    <ol class="part-list" id="part-list"></ol>
+  </section>
+
+  <section class="panel drawing" aria-label="Drawing">
+    <div class="panel-head"><h2 class="title" id="draw-title">No part selected</h2><span class="meta" id="draw-meta"></span></div>
+    <div class="sheet" id="sheet"></div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section class="panel estimate" aria-label="Estimate">
+    <div class="panel-head"><h2 id="est-title">Estimate</h2></div>
+    <div class="est-body" id="est-body"></div>
+    <div class="job-total" id="job-total"></div>
+  </section>
+</main>
+
+<main id="view-quote" class="page" hidden>
+  <a class="back" href="#work" data-view="work">Back to parts</a>
+  <div class="page-head"><h1>Quote</h1><div class="actions"><button class="btn" id="download-csv">Download line items (CSV)</button><button class="btn primary" id="download-pdf-2">Download quote PDF</button></div></div>
+  <div class="quote-sheet" id="quote-sheet"></div>
+</main>
+
+<main id="view-rates" class="page" hidden>
+  <a class="back" href="#work" data-view="work">Back to parts</a>
+  <div class="page-head"><h1>Rates and charges</h1>
+    <div class="actions"><a class="btn" href="app/rates.xlsx" download>Download the Excel workbook</a>
+      <label class="btn"><input type="file" id="rates-file" accept=".xlsx" hidden>Load an edited workbook</label></div></div>
+  <p class="lede">The rates below are only <b>examples</b> for the demo. On your PC they come from your own cut charts in <code>rates.xlsx</code>, and you can edit them here or in Excel.</p>
+  <div class="rates-grid">
+    <section class="panel"><div class="panel-head"><h2>Cut rates</h2><button class="link" id="add-rate">Add a row</button></div><div class="table-wrap"><table class="grid" id="rates-table"></table></div></section>
+    <section class="panel"><div class="panel-head"><h2>Shop charges</h2></div><div class="charges" id="charges"></div>
+      <div class="panel-head sub"><h2>End paint</h2></div><p class="hint">The colour each material is marked with on screen, like the paint on the end of a bar.</p><div class="paints" id="paints"></div></section>
+  </div>
+</main>
+
+<main id="view-help" class="page" hidden>
+  <a class="back" href="#work" data-view="work">Back to parts</a>
+  <div class="page-head"><h1>How it works</h1></div>
+  <article class="help" id="help"></article>
+</main>
+
+<div class="boot" id="boot" role="status"><div><b>Getting the estimator ready</b><span id="boot-step">Starting</span></div></div>
+<script type="module" src="app.js?v=d526e1a95f"></script>
 </body>
 </html>

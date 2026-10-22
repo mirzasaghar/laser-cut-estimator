@@ -17,4 +17,4 @@
 
 ## Rates
 
-Every rate and charge is on the Rates and charges tab and in the Excel workbook you can download there. The numbers in it now are examples so the demo works. On your shop PC the estimator reads the workbook each time it starts, so changing a rate means editing a cell in Excel and saving.
+Every rate and charge is on the Rates page, which also has the Excel workbook to download. The numbers in it now are only examples for the demo. On your shop PC the estimator reads the workbook each time it starts, so changing a rate means editing a cell in Excel and saving.
