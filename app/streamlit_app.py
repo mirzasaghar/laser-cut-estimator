@@ -56,6 +56,9 @@ st.markdown("""
     [data-testid="stColumn"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: .75rem 1rem !important; }
     [data-testid="stColumn"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] { flex: 1 1 calc(50% - 1rem) !important; min-width: calc(50% - 1rem) !important; width: auto !important; }
     .quote-sheet { padding:14px; }
+    .quote-sheet .meta { grid-template-columns: 1fr 1fr; }
+    /* the cut and price tables read better one under the other on a phone */
+    [data-testid="stColumn"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(table.est) { flex-basis:100% !important; min-width:100% !important; }
   }
 </style>
 """, unsafe_allow_html=True)
