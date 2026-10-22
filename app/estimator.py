@@ -52,6 +52,12 @@ class PartGeometry:
     dashed_skipped: int = 0
     gaps_closed: int = 0
     warnings: list[str] = field(default_factory=list)
+    reference_lines: list[list[tuple[float, float]]] = field(default_factory=list)  # bend/etch lines, drawn but not cut
+    source: str = "DXF"
+    blocked: str = ""                    # set when the file can't be priced as it is, with the reason
+    model_thickness: float | None = None # plate thickness read from a STEP model, inches
+    ignored_items: int = 0               # PDF: dimensions, notes, title block and border left out
+    drawing_width: float = 0.0           # PDF: part width as drawn before any scale correction
 
 
 def _dist(a, b):
@@ -140,6 +146,7 @@ def read_dxf(data: bytes, name: str, units_override: str = "auto", join_tol_in: 
         layer = e.dxf.get("layer", "0")
         if _skip_layer(layer):
             skipped.add(layer)
+            geo.reference_lines.extend(pts for pts, _ in _pieces(e, scale))
             continue
         # SolidWorks, Inventor and others export bend lines on the cut layer but dashed
         # (HIDDEN for bend down, CENTER for bend up), so a dashed line is never a cut
@@ -148,6 +155,7 @@ def read_dxf(data: bytes, name: str, units_override: str = "auto", join_tol_in: 
             lt = doc.layers.get(layer).dxf.linetype.upper() if doc.layers.has_entry(layer) else "CONTINUOUS"
         if lt not in ("CONTINUOUS", "BYBLOCK"):
             geo.dashed_skipped += 1
+            geo.reference_lines.extend(pts for pts, _ in _pieces(e, scale))
             continue
         geo.entities_used += 1
         pieces.extend(_pieces(e, scale))
@@ -260,17 +268,25 @@ def estimate(geo: PartGeometry, rate: dict, qty: int, settings: dict) -> dict:
     machine_each = run_min_each / 60 * settings["machine_rate_hr"]
 
     t = float(rate["thickness_in"])
-    if settings["material_basis"] == "Rectangle the part needs":
-        mat_area = (geo.width + settings["part_spacing_in"]) * (geo.height + settings["part_spacing_in"])
+    lb_cost = float(rate["density_lb_in3"]) * float(rate["price_per_lb"]) * (1 + settings["material_markup_pct"] / 100)
+    sw, sh = settings.get("sheet_w_in", 48.0), settings.get("sheet_h_in", 96.0)
+    per_sheet = sheet_fit(geo.width, geo.height, settings["part_spacing_in"], sw, sh, settings.get("sheet_margin_in", 0.5))
+    sheets = math.ceil(qty / per_sheet) if per_sheet else 0
+    basis = settings["material_basis"]
+    if basis == "Full sheets used" and per_sheet:
+        material_each = sheets * sw * sh * t * lb_cost / qty
+    elif basis == "Net part area":
+        material_each = geo.net_area * t * lb_cost
     else:
-        mat_area = geo.net_area
+        material_each = (geo.width + settings["part_spacing_in"]) * (geo.height + settings["part_spacing_in"]) * t * lb_cost
     weight_each = geo.net_area * t * float(rate["density_lb_in3"])
-    material_each = mat_area * t * float(rate["density_lb_in3"]) * float(rate["price_per_lb"]) * (1 + settings["material_markup_pct"] / 100)
 
     each = machine_each + material_each + settings["handling_per_part"]
     subtotal = each * qty + settings["setup_per_job"]
     total = max(subtotal, settings["minimum_charge"])
     warnings = []
+    if not per_sheet:
+        warnings.append(f"The part doesn't fit on a {sw:g} x {sh:g} in sheet.")
     if geo.smallest_hole is not None and geo.smallest_hole < t:
         warnings.append(f"Smallest hole ({geo.smallest_hole:.3f} in) is smaller than the material thickness ({t:.3f} in). It may need drilling or a special cut.")
     return {
@@ -278,7 +294,18 @@ def estimate(geo: PartGeometry, rate: dict, qty: int, settings: dict) -> dict:
         "machine_each": machine_each, "material_each": material_each, "weight_each": weight_each,
         "each": each, "qty": qty, "setup": settings["setup_per_job"], "subtotal": subtotal,
         "total": total, "minimum_applied": total > subtotal, "warnings": warnings,
+        "per_sheet": per_sheet, "sheets": sheets, "sheet": (sw, sh),
     }
+
+
+def sheet_fit(w, h, spacing, sheet_w, sheet_h, margin=0.5) -> int:
+    """Parts per sheet laid out in a plain grid, trying both ways round. Real nesting
+    software packs tighter, so this is the safe side for a quote."""
+    uw, uh = sheet_w - 2 * margin + spacing, sheet_h - 2 * margin + spacing
+    pw, ph = w + spacing, h + spacing
+    if pw <= 0 or ph <= 0:
+        return 0
+    return max(int(uw // pw) * int(uh // ph), int(uw // ph) * int(uh // pw))
 
 
 def job_total(lines: list[dict], settings: dict) -> dict:
@@ -293,6 +320,8 @@ def job_total(lines: list[dict], settings: dict) -> dict:
 
 
 def svg_preview(geo: PartGeometry, size: int = 360) -> str:
+    """Drawn the way shop quoting tools show a part: the plate filled light grey with a
+    thin outline, holes cut out, bend and etch lines dashed, open outlines in red."""
     if not geo.contours:
         return ""
     allpts = [p for c in geo.contours for p in c.points]
@@ -300,14 +329,154 @@ def svg_preview(geo: PartGeometry, size: int = 360) -> str:
     w, h = max(geo.width, 1e-6), max(geo.height, 1e-6)
     pad = max(w, h) * 0.04
     vb = f"{minx - pad:.4f} {-(miny + h) - pad:.4f} {w + 2 * pad:.4f} {h + 2 * pad:.4f}"
-    stroke = max(w, h) / 320
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}" width="100%" style="max-height:{size}px" role="img" aria-label="Preview of {geo.name}">']
-    colours = {"outside": "#1d2327", "hole": "#1d2327", "open": "#c2410c"}
+    stroke = max(w, h) / 420
+
+    def d(points, close=False):
+        return " ".join(f"{'M' if i == 0 else 'L'}{x:.4f},{-y:.4f}" for i, (x, y) in enumerate(points)) + (" Z" if close else "")
+
+    closed = " ".join(d(c.points, True) for c in geo.contours if c.closed)
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}" width="100%" style="max-height:{size}px;display:block" role="img" aria-label="Flat pattern of {geo.name}">']
+    if closed:
+        out.append(f'<path d="{closed}" fill="#e4e5e4" fill-rule="evenodd" stroke="#3b4045" stroke-width="{stroke:.4f}" stroke-linejoin="round"/>')
+    for ref in geo.reference_lines:
+        out.append(f'<path d="{d(ref)}" fill="none" stroke="#0e9aa7" stroke-width="{stroke:.4f}" stroke-dasharray="{stroke * 6:.4f} {stroke * 4:.4f}"/>')
     for c in geo.contours:
-        d = " ".join(f"{'M' if i == 0 else 'L'}{x:.4f},{-y:.4f}" for i, (x, y) in enumerate(c.points))
-        dash = f' stroke-dasharray="{stroke * 4:.4f} {stroke * 3:.4f}"' if c.role == "open" else ""
-        out.append(f'<path d="{d}" fill="none" stroke="{colours[c.role]}" stroke-width="{stroke:.4f}"{dash}/>')
-        x, y = c.points[0]
-        out.append(f'<circle cx="{x:.4f}" cy="{-y:.4f}" r="{stroke * 2.2:.4f}" fill="#e8590c"/>')
+        if not c.closed:
+            out.append(f'<path d="{d(c.points)}" fill="none" stroke="#c81e1e" stroke-width="{stroke * 1.6:.4f}"/>')
     out.append("</svg>")
     return "".join(out)
+
+
+def read_step_file(data: bytes, name: str) -> PartGeometry:
+    import step_reader
+    sp = step_reader.read_step(data, name)
+    geo = PartGeometry(name=name, units_note=sp.units_note, source="STEP")
+    if not sp.flat:
+        geo.blocked = sp.reason
+        return geo
+    geo.model_thickness = sp.thickness
+    geo.contours = [Contour(points=pts, closed=True, length=length, area=_poly_area(pts)) for pts, length in zip(sp.loops, sp.loop_lengths)]
+    _classify(geo)
+    geo.units_note = f"{sp.units_note}; a flat plate {sp.thickness:.4f} in thick, read from the 3D model"
+    return geo
+
+
+def read_pdf(data: bytes, name: str, width_in: float | None = None) -> PartGeometry:
+    """A vector PDF exported from CAD. The page border is dropped, the part's outline is
+    the biggest closed shape left, and only closed shapes inside it are kept, so
+    dimensions, centre marks, notes and the title block don't get priced."""
+    import pymupdf
+    geo = PartGeometry(name=name, units_note="drawn scale (1:1 unless you enter the real width)", source="PDF")
+    doc = pymupdf.open(stream=data, filetype="pdf")
+    page = doc[0]
+    drawings = page.get_drawings()
+    if not drawings:
+        geo.blocked = ("This PDF has no lines inside it, only a picture (probably a scan), so nothing can be measured. "
+                       "Ask the customer for the DXF, or the PDF exported straight from their CAD.")
+        return geo
+    pw, ph = page.rect.width, page.rect.height
+    pieces, refs = [], []
+
+    def pt(p):
+        return (p.x / 72.0, (ph - p.y) / 72.0)
+
+    for d in drawings:
+        if d.get("color") is None:          # filled only: arrowheads, hatching, text drawn as shapes
+            continue
+        dashed = d.get("dashes") not in (None, "", "[] 0", "[] 0.0")
+        for it in d["items"]:
+            kind = it[0]
+            if kind == "l":
+                segs = [[pt(it[1]), pt(it[2])]]
+            elif kind == "c":
+                p0, c1, c2, p3 = (pt(q) for q in it[1:5])
+                segs = [[(
+                    (1 - t) ** 3 * p0[0] + 3 * (1 - t) ** 2 * t * c1[0] + 3 * (1 - t) * t * t * c2[0] + t ** 3 * p3[0],
+                    (1 - t) ** 3 * p0[1] + 3 * (1 - t) ** 2 * t * c1[1] + 3 * (1 - t) * t * t * c2[1] + t ** 3 * p3[1])
+                    for t in (i / 48 for i in range(49))]]
+            elif kind == "re":
+                r = it[1]
+                c = [(r.x0 / 72, (ph - r.y0) / 72), (r.x1 / 72, (ph - r.y0) / 72), (r.x1 / 72, (ph - r.y1) / 72), (r.x0 / 72, (ph - r.y1) / 72)]
+                segs = [[c[i], c[(i + 1) % 4]] for i in range(4)]
+            elif kind == "qu":
+                q = it[1]
+                c = [pt(q.ul), pt(q.ur), pt(q.lr), pt(q.ll)]
+                segs = [[c[i], c[(i + 1) % 4]] for i in range(4)]
+            else:
+                continue
+            for seg in segs:
+                (refs if dashed else pieces).append((seg, _poly_length(seg)))
+
+    contours = _chain(pieces, 0.007, geo)
+    geo.gaps_closed = 0  # joins in a PDF are rounding, not gaps in the drawing
+    def is_border(c):
+        # a drawing border is a plain rectangle running close to the page edges
+        xs, ys = [x for x, _ in c.points], [y for _, y in c.points]
+        x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+        on_box = all(min(abs(x - x0), abs(x - x1), abs(y - y0), abs(y - y1)) < 0.01 for x, y in c.points)
+        near_edges = x0 < 1.0 and y0 < 1.0 and x1 > pw / 72 - 1.0 and y1 > ph / 72 - 1.0
+        return c.closed and on_box and near_edges
+    frame = [c for c in contours if is_border(c)]
+    rest = [c for c in contours if c not in frame and c.closed]
+    if not rest:
+        geo.blocked = "No closed outline found on the page, so the part can't be picked out of the drawing."
+        return geo
+    outline = max(rest, key=lambda c: c.area)
+    kept = [outline] + [c for c in rest if c is not outline and c.area < outline.area and _inside(c.points[0], outline.points)]
+    geo.ignored_items = len(contours) - len(kept)
+    ox = [x for x, _ in outline.points]
+    geo.drawing_width = max(ox) - min(ox)
+    k = (width_in / geo.drawing_width) if width_in and geo.drawing_width else 1.0
+    if k != 1.0:
+        geo.units_note = f"scaled so the part is {width_in:.3f} in wide, as you entered (the print is drawn at {1 / k:.3f} of full size)"
+        for c in kept:
+            c.points = [(x * k, y * k) for x, y in c.points]
+            c.length *= k
+            c.area *= k * k
+    for seg, _ in refs:
+        oxmin, oxmax = min(ox), max(ox)
+        if all(oxmin - 0.01 <= x <= oxmax + 0.01 for x, _ in seg):
+            geo.reference_lines.append([(x * k, y * k) for x, y in seg])
+    geo.contours = kept
+    _classify(geo)
+    if geo.ignored_items:
+        geo.warnings.append(f"{_n(geo.ignored_items, 'item')} on the page left out (border, title block, dimensions, notes). Check the drawing above shows only the part.")
+    return geo
+
+
+RATE_COLUMNS = {"material": "material", "thickness": "thickness", "thickness (in": "thickness_in",
+                "cut speed": "feed_ipm", "pierce time": "pierce_sec", "density": "density_lb_in3", "material price": "price_per_lb"}
+CHARGE_KEYS = {"machine rate": "machine_rate_hr", "head travel": "motion_allowance_pct", "setup per job": "setup_per_job",
+               "minimum job": "minimum_charge", "handling per part": "handling_per_part", "material markup": "material_markup_pct",
+               "spacing between": "part_spacing_in", "sheet width": "sheet_w_in", "sheet length": "sheet_h_in",
+               "sheet edge": "sheet_margin_in", "quote valid": "valid_days", "lead time": "lead_days"}
+
+
+def load_rates_workbook(data: bytes) -> tuple[list[dict], dict]:
+    """Reads the shop's rates.xlsx (Rates and Charges sheets). Columns are matched by the
+    start of their heading, so small wording changes in Excel don't break it."""
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
+    ws = wb["Rates"]
+    heads = [str(c.value or "").strip().lower() for c in ws[1]]
+
+    def key_for(h):
+        if h in ("material", "thickness"):
+            return h
+        # longest prefix wins, so "material price" isn't read as "material"
+        hits = [k for k in RATE_COLUMNS if h.startswith(k) and k not in ("material", "thickness")]
+        return RATE_COLUMNS[max(hits, key=len)] if hits else None
+    keys = [key_for(h) for h in heads]
+    rows = []
+    for r in ws.iter_rows(min_row=2, values_only=True):
+        row = {k: v for k, v in zip(keys, r) if k}
+        if row.get("material") and row.get("thickness") is not None:
+            row["thickness"] = str(row["thickness"])
+            rows.append(row)
+    settings = {}
+    if "Charges" in wb.sheetnames:
+        for label, value, *_ in wb["Charges"].iter_rows(min_row=2, values_only=True):
+            key = next((v for k, v in CHARGE_KEYS.items() if str(label or "").lower().startswith(k)), None)
+            if key and value is not None:
+                settings[key] = float(value)
+    return rows, settings
