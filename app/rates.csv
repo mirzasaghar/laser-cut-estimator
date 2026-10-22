@@ -1,0 +1,17 @@
+material,thickness,thickness_in,feed_ipm,pierce_sec,density_lb_in3,price_per_lb
+Mild steel,16 ga,0.0598,700,0.3,0.2836,0.75
+Mild steel,14 ga,0.0747,550,0.4,0.2836,0.75
+Mild steel,11 ga,0.1196,300,0.6,0.2836,0.75
+Mild steel,3/16 in,0.1875,180,1.0,0.2836,0.75
+Mild steel,1/4 in,0.25,140,1.5,0.2836,0.75
+Mild steel,3/8 in,0.375,90,2.5,0.2836,0.75
+Mild steel,1/2 in,0.5,65,4.0,0.2836,0.75
+Stainless 304,16 ga,0.0598,900,0.3,0.289,2.60
+Stainless 304,14 ga,0.0747,700,0.4,0.289,2.60
+Stainless 304,11 ga,0.1196,350,0.7,0.289,2.60
+Stainless 304,3/16 in,0.1875,160,1.2,0.289,2.60
+Stainless 304,1/4 in,0.25,100,2.0,0.289,2.60
+Aluminum 5052,16 ga,0.0508,900,0.3,0.0968,3.20
+Aluminum 5052,1/8 in,0.125,450,0.6,0.0968,3.20
+Aluminum 5052,3/16 in,0.1875,250,1.0,0.0968,3.20
+Aluminum 5052,1/4 in,0.25,160,1.5,0.0968,3.20

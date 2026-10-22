@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Laser cut estimator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='2' y='2' width='12' height='12' fill='none' stroke='%231d2327' stroke-width='1.6'/%3E%3Ccircle cx='8' cy='8' r='2' fill='%23c2410c'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/browser@1.9.2/build/stlite.css">
+<style>
+  body { margin: 0; background: #fff; color: #1d2327; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #boot { max-width: 34rem; margin: 18vh auto 0; padding: 0 16px; }
+  #boot h1 { font-size: 1.4rem; margin: 0 0 .4rem; }
+  #boot p { color: #4b5563; line-height: 1.5; margin: 0; }
+</style>
+</head>
+<body>
+<div id="root"><div id="boot"><h1>Laser cut estimator</h1><p>Starting up. The estimator runs in your browser, so the first load takes about 20 seconds while it fetches Python. After that it's quick.</p></div></div>
+<noscript>This estimator needs JavaScript turned on.</noscript>
+<script type="module">
+import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@1.9.2/build/stlite.js";
+mount({
+  requirements: ["ezdxf==1.4.5"],
+  entrypoint: "streamlit_app.py",
+  files: {
+  "streamlit_app.py": {
+    "url": "./app/streamlit_app.py"
+  },
+  "estimator.py": {
+    "url": "./app/estimator.py"
+  },
+  "rates.csv": {
+    "url": "./app/rates.csv"
+  },
+  "how_it_works.md": {
+    "url": "./app/how_it_works.md"
+  },
+  "samples/flange-metric.dxf": {
+    "url": "./app/samples/flange-metric.dxf"
+  },
+  "samples/l-bracket-flat.dxf": {
+    "url": "./app/samples/l-bracket-flat.dxf"
+  },
+  "samples/mounting-plate.dxf": {
+    "url": "./app/samples/mounting-plate.dxf"
+  }
+},
+  streamlitConfig: {
+  "client.toolbarMode": "viewer",
+  "theme.base": "light",
+  "theme.primaryColor": "#c2410c",
+  "theme.textColor": "#1d2327",
+  "theme.backgroundColor": "#ffffff",
+  "theme.secondaryBackgroundColor": "#f2f3f1"
+},
+}, document.getElementById("root"));
+</script>
+</body>
+</html>
